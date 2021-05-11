@@ -119,8 +119,10 @@ The receiver requires GPUDirect RDMA enabled on the system.
 
 ## Getting the code 
 
+Clone the main branch of this project with all the submodules
+
 ```
-git clone --recurse-submodules ssh://git@gitlab-master.nvidia.com:12051/eagostini/5t5g.git
+git clone --recurse-submodules https://github.com/NVIDIA/5t5g.git
 ```
 
 ## Building
