@@ -18,8 +18,7 @@
 #define RU_HPP_
 
 #include "constants.hpp"
-#include <rte_ether.h>
-#include <rte_ethdev.h>
+#include "utils.hpp"
 
 extern struct rte_ether_addr ru0_addr;
 extern uint16_t ru0_ap[NUM_AP];

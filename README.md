@@ -1,20 +1,21 @@
 # 5T for 5G
 
-The goal of this project is to provide an example about how to use [5T for 5G features](https://news.developer.nvidia.com/new-real-time-smartnic-technology-5t-for-5g) through DPDK library. There are two applications (to understand terminology and acronyms, please refer to the [ORAN standard](https://www.o-ran.org)):
+The goal of this project is to provide an example on how to use [5T for 5G features](https://news.developer.nvidia.com/new-real-time-smartnic-technology-5t-for-5g) through the DPDK library. To understand the terminology and acronyms, please refer to the [ORAN standard](https://www.o-ran.org)):
 
-* Generator: simulates two O-RU sending O-RAN formatted U-plane packets using different slot durations
-* Receiver: simulates an O-DU which is capable to receive O-RAN formatted U-plane packets and distinguish between data flows coming from the two different O-RUs
+5T for 5G constains two applications: 
+* Generator: simulates two O-RUs sending O-RAN formatted U-plane packets using different slot durations
+* Receiver: simulates an O-DU which is capable to receive O-RAN CUS U-plane packets and distinguish the data flows coming from the two O-RUs
 
-Please note that main goal is not the best performance but to show how to enable these features in you application.
+Please note that main goal of these applications is not to showcase performance, but to demonstrate how to enable 5T for 5G features in you application.
 
 ### Generator
 
 C++ application simulating two O-RUs: one working at 30 kHz SCS (500 us of slot duration) and the other working at 15 kHz SCS (1 ms slot duration). Each RU sends O-RAN formatted U-plane packets from CPU memory using Accurate Send Scheduling (slot start timestamp + 700 us).
-Each O-RU has its own MAC address and it simulates traffic coming from 4 different antenna ports (or eAxC ID).
+Each O-RU has its own MAC address and it simulates traffic coming from 4 different antenna ports (or eAxC IDs).
 
 ### Receiver
 
-C++ application simulating an O-DU able to receive O-RAN formatted U-plane packet into GPU memory (GPUDirect RDMA) using DPDK flow steering rules to distinguish traffic coming from the two different O-RUs. Specifically the following rules are applied to distinguish different flows:
+C++ application simulating an O-DU able to receive O-RAN CUS U-plane packet into GPU memory (GPUDirect RDMA) using DPDK flow steering rules to distinguish traffic coming from the two different O-RUs. Specifically the following rules are applied to distinguish different flows:
 * MAC address
 * VLAN tag
 * O-RAN message type (C/U-plane `ecpriMessage`)
@@ -26,10 +27,10 @@ These RX queues stores packets in a DPDK mempool which resides in GPU memory and
 cudaMalloc();
 rte_extmem_register();
 rte_dev_dma_map();
-mpool_gpu_memory = rte_pktmbuf_pool_create_extbuf();
+rte_pktmbuf_pool_create_extbuf();
 ```
 
-The receiver requires GPUDirect RDMA enabled on the system.
+**Note** The receiver requires GPUDirect RDMA enabled on the system.
 
 
 ## Prerequisites
@@ -67,23 +68,46 @@ The receiver requires GPUDirect RDMA enabled on the system.
 
    For more information on CUDA support in CMake, see https://devblogs.nvidia.com/building-cuda-applications-cmake/.
 
-3. Mellanox ConnectX-6 Dx NIC
+3. Mellanox OFED (version 5.4-1.0.3.0 or newer)
 
-   For enabling native eCPRI flow steering the FW config has to be changed:
+   The following instructions are for installing MOFED 5.4-1.0.3.0 for Ubuntu 18.04:
+   ```
+   export OFED_VERSION=5.4-1.0.3.0
+   export UBUNTU_VERSION=18.04
+
+   wget http://www.mellanox.com/downloads/ofed/MLNX_OFED-$OFED_VERSION/MLNX_OFED_LINUX-$OFED_VERSION-ubuntu$UBUNTU_VERSION-x86_64.tgz
+   tar xvf MLNX_OFED_LINUX-$OFED_VERSION-ubuntu$UBUNTU_VERSION-x86_64.tgz
+   cd MLNX_OFED_LINUX-$OFED_VERSION-ubuntu$UBUNTU_VERSION-x86_64
+   sudo ./mlnxofedinstall --upstream-libs --dpdk --with-mft
+   sudo /etc/init.d/openibd restart
+   ```
+
+4. Mellanox ConnectX-6 Dx NIC
+
+   Installing MOFED 5.4-1.0.3.0 should automatically upgrade ConnectX-6 Dx firmware to version 22.31.1014. If FW version on the card is older than 22.31.1014, please upgrade manually.
+
+   A number of FW configs need to be changes in order to enable 5T for 5G.
+
+   Native eCPRI flow steering enable:
    ```
    sudo mlxconfig -d <NIC Bus Id> s PROG_PARSE_GRAPH=1
    sudo mlxconfig -d <NIC Bus Id> s FLEX_PARSER_PROFILE_ENABLE=4
    ```
-   For accurate send scheduling, Aerial Fronthaul Driver relies on ConnectX-6 Dx offload.
-   For enabling UTC for accurate packet scheduling:
-   ```
-      sudo mlxconfig -d <NIC Bus Id> s REAL_TIME_CLOCK_ENABLE=1
-   ```
-   
-4. Meson and Ninja
-   
-   Meson and Ninja are required to build DPDK.
 
+   ConnectX-6 Dx offload for accurate send scheduling enable:
+   ```
+   sudo mlxconfig -d <NIC Bus Id> s REAL_TIME_CLOCK_ENABLE=1
+   sudo mlxconfig -d <NIC Bus Id> s ACCURATE_TX_SCHEDULER=1
+   ```
+
+   Please reser the NIC FW for the changes to take effect:
+   ```
+   sudo mlxfwreset -d <NIC Bus Id> --yes --level 3 r
+   ```
+
+5. Meson and Ninja
+   
+   Meson and Ninja are required to build DPDK:
    ```
    sudo apt-get install -y python3-setuptools ninja-build
    wget https://github.com/mesonbuild/meson/releases/download/0.56.0/meson-0.56.0.tar.gz
@@ -91,7 +115,8 @@ The receiver requires GPUDirect RDMA enabled on the system.
    cd meson-0.56.0
    sudo python3 setup.py install
    '''
-5. PHC2SYS
+
+6. PHC2SYS
 
    In order to make the generator work, the clock on the ConnectX-6 Dx NIC has to be synchronized with the system clock. For this reason `phc2sys` has to be enabled between the two clocks where the NIC is the master. As an example, to enable it on the network interface `enp181s0f1`:
 
@@ -151,8 +176,8 @@ SW:
 * Operating System: Ubuntu 18.04.5 LTS
 * Kernel Version: 5.4.0-53-lowlatency
 * GCC: 8.4.0 (Ubuntu 8.4.0-1ubuntu1~18.04)
-* Mellanox NIC firmware version: 22.28.1002
-* Mellanox OFED driver version: MLNX_OFED_LINUX-5.1-0.6.6.0
+* Mellanox NIC firmware version: 22.31.1014
+* Mellanox OFED driver version: MLNX_OFED_LINUX-5.4-1.0.3.0
 * CUDA Version: 11.2
 * GPU Driver Version: 455.32.00
 
