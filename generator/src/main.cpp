@@ -160,7 +160,7 @@ static int tx_core(void *arg)
             size_t                prbu_buf_len = PRBS_PER_PACKET * PRB_SIZE(IQ_SAMPLE_SIZE);
             struct rte_mbuf*      mbuf_pkt     = tx_mbufs[ipkt];
 
-            mbuf_pkt->ol_flags = acc_send_sched_dynfield_bitnum;
+	    mbuf_pkt->ol_flags = 1ULL << acc_send_sched_dynfield_bitnum;
             *RTE_MBUF_DYNFIELD(mbuf_pkt, acc_send_sched_dynfield_offset, uint64_t*) = start_tx + ru->tx_offset_pkts_ns;
 
             pkt_hdr_template* data = rte_pktmbuf_mtod(mbuf_pkt, pkt_hdr_template*);
